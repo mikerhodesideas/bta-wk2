@@ -1,6 +1,8 @@
 const SHEET_URL = ''; // leave blank or add a sheet here
 const TAB = 'Search_Terms';
 
+const mike_test = 'https://docs.google.com/spreadsheets/d/1B60gfk6h-IMCEWYf_qWpS6yySZQD8IUnvh9jz-Wtu5w/edit'
+
 // GAQL query for search terms
 const QUERY = `
 SELECT 
@@ -21,16 +23,23 @@ ORDER BY metrics.cost_micros DESC
 
 function main() {
   try {
+    // is mike_test present & valid, set SHEET_URL to it's value
+    if (mike_test) {
+      sheet_url = mike_test;
+    } else {
+      sheet_url = SHEET_URL;
+    }
+
     // Access the Google Sheet
     let ss;
-    if (!SHEET_URL) {
+    if (!sheet_url) {
       ss = SpreadsheetApp.create("Search Term Report");
       let url = ss.getUrl();
       Logger.log("No SHEET_URL found, so this sheet was created: " + url);
     } else {
-      ss = SpreadsheetApp.openByUrl(SHEET_URL);
+      ss = SpreadsheetApp.openByUrl(sheet_url);
     }
-    
+
     // Get or create the tab
     let sheet;
     try {
@@ -45,19 +54,19 @@ function main() {
       Logger.log("Error with sheet: " + e);
       return;
     }
-    
+
     // Set headers
     const headers = ["Search Term", "Campaign", "Ad Group", "Impressions", "Clicks", "Cost", "Conversions", "Conversion Value", "CPC", "CTR", "Conv. Rate", "CPA", "ROAS", "AOV"];
-    
+
     sheet.getRange(1, 1, 1, headers.length).setValues([headers]).setFontWeight("bold");
-    
+
     // Run the search term query
     const report = AdsApp.report(QUERY);
     const rows = report.rows();
-    
+
     // Process data and calculate metrics
     const data = calculateMetrics(rows);
-    
+
     // Write data to sheet (only if we have data)
     if (data.length > 0) {
       sheet.getRange(2, 1, data.length, data[0].length).setValues(data);
@@ -65,7 +74,7 @@ function main() {
     } else {
       Logger.log("No data found for the specified criteria.");
     }
-    
+
   } catch (e) {
     Logger.log("Error in main function: " + e);
   }
@@ -73,10 +82,10 @@ function main() {
 
 function calculateMetrics(rows) {
   const data = [];
-  
+
   while (rows.hasNext()) {
     const row = rows.next();
-    
+
     const searchTerm = row['search_term_view.search_term'];
     const campaign = row['campaign.name'];
     const adGroup = row['ad_group.name'];
@@ -85,7 +94,7 @@ function calculateMetrics(rows) {
     const costMicros = parseInt(row['metrics.cost_micros'], 10) || 0;
     const conversions = parseFloat(row['metrics.conversions']) || 0;
     const conversionValue = parseFloat(row['metrics.conversions_value']) || 0;
-    
+
     // Calculate metrics
     const cost = costMicros / 1000000;  // Convert micros to actual currency
     const cpc = clicks > 0 ? cost / clicks : 0;
@@ -94,13 +103,13 @@ function calculateMetrics(rows) {
     const cpa = conversions > 0 ? cost / conversions : 0;
     const roas = cost > 0 ? conversionValue / cost : 0;
     const aov = conversions > 0 ? conversionValue / conversions : 0;
-    
+
     // Add all variables and calculated metrics to a new row
     const newRow = [searchTerm, campaign, adGroup, impressions, clicks, cost, conversions, conversionValue, cpc, ctr, convRate, cpa, roas, aov];
-    
+
     // Push new row to the data array
     data.push(newRow);
   }
-  
+
   return data;
 }

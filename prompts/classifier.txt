@@ -1,0 +1,50 @@
+You are tasked with creating a Google Ads script that reads settings from a Google Sheet, classifies search terms using AI models, and outputs the results. Follow these instructions carefully:
+
+note you do NOT need to access a google ads account at all in this script.
+data will be read from & to a google sheet
+and you'll use an LLM to classify search terms
+
+this script will run inside a google asd account though
+
+so use javascript that can run in a google ads script. important!
+
+--
+
+instruxtions: 
+1. Use the  Google Sheets URL to access the settings provided by user
+
+Read the following settings from the sheet:
+model (one of: openai, anthropic, google)
+cheap (yes or no)
+topTerms (a list of search terms to classify)
+
+Define the following classification categories for search terms:
+<enum>
+INFORMATIONAL: Queries seeking general information
+NAVIGATIONAL: Queries looking for a specific website or page
+COMMERCIAL: Queries with buying intent
+TRANSACTIONAL: Queries indicating immediate purchase intent
+LOCAL: Queries related to local businesses or services
+QUESTION: Queries phrased as questions </enum>
+
+Structure your main function as follows:
+a. Read settings from the sheet
+b. Validate the settings
+c. Classify each search term using the specified model
+d. Output results back to the sheet
+
+Implement API calls for each model:
+keys are in named ranges as per image - use keys prefixed with mike if present, otherwise fallback to key ones
+
+For each model, use the 'cheap' setting to determine which model version to use:
+Implement error handling and logging:
+Log all API calls, their duration, and responses
+Handle API errors gracefully, retrying failed calls up to 3 times
+Log any persistent errors to the sheet
+
+Output results:
+Create a new sheet named "Results"
+Output each search term with its classification and confidence score (if available)
+
+
++ added code for the 3 test apikey scripts
