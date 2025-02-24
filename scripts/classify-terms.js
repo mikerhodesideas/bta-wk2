@@ -1,6 +1,8 @@
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+
 const OPENAI_MODEL = "gpt-4o-mini";
 const SHEET_ID = "1B60gfk6h-IMCEWYf_qWpS6yySZQD8IUnvh9jz-Wtu5w";
+
+
 
 // Cost per million tokens (in USD)
 const COST_PER_1M_INPUT_TOKENS = 0.15;
@@ -18,6 +20,7 @@ let totalOutputTokens = 0;
 
 function main() {
     try {
+        const apiKey = getApiKey();
         const ss = SpreadsheetApp.openById(SHEET_ID);
         const terms = ss.getRangeByName('topTerms').getValues();
 
@@ -59,7 +62,7 @@ Please provide two classifications:
 Return ONLY the two classifications separated by a pipe character (|) like this example:
 Swimwear|COMMERCIAL`;
 
-            const { classification, inputTokens, outputTokens, cost } = generateTextOpenAI(prompt, OPENAI_API_KEY, OPENAI_MODEL);
+            const { classification, inputTokens, outputTokens, cost } = generateTextOpenAI(prompt, apiKey, OPENAI_MODEL);
             const [category, intent] = classification.split('|');
 
             results.push([
@@ -104,6 +107,20 @@ Swimwear|COMMERCIAL`;
     } catch (error) {
         Logger.log('An error occurred: ' + error);
     }
+}
+
+// Get OpenAI API key from sheet
+function getApiKey() {
+    const ss = SpreadsheetApp.openById(SHEET_ID);
+    const keyRange = ss.getRangeByName('key_openai');
+    if (!keyRange) {
+        throw new Error('Named range "key_openai" not found in spreadsheet');
+    }
+    const key = keyRange.getValue();
+    if (!key) {
+        throw new Error('OpenAI API key not found in named range "key_openai"');
+    }
+    return key;
 }
 
 function generateTextOpenAI(prompt, apiKey, model) {
