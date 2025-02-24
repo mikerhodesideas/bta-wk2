@@ -1,5 +1,5 @@
 const SHEET_URL = ''; // leave blank or add a sheet here
-const TAB = 'Search_Terms';
+const TAB = 'SearchTerms';
 
 const mike_test = 'https://docs.google.com/spreadsheets/d/1B60gfk6h-IMCEWYf_qWpS6yySZQD8IUnvh9jz-Wtu5w/edit'
 
@@ -17,18 +17,13 @@ SELECT
 FROM search_term_view
 WHERE segments.date DURING LAST_30_DAYS
   AND campaign.advertising_channel_type = "SEARCH"
-  AND metrics.impressions >= 30
-ORDER BY metrics.cost_micros DESC
+ORDER BY metrics.impressions DESC
 `;
 
 function main() {
   try {
     // is mike_test present & valid, set SHEET_URL to it's value
-    if (mike_test) {
-      sheet_url = mike_test;
-    } else {
-      sheet_url = SHEET_URL;
-    }
+    sheet_url = mike_test ? mike_test : SHEET_URL;
 
     // Access the Google Sheet
     let ss;
@@ -56,9 +51,7 @@ function main() {
     }
 
     // Set headers
-    const headers = ["Search Term", "Campaign", "Ad Group", "Impressions", "Clicks", "Cost", "Conversions", "Conversion Value", "CPC", "CTR", "Conv. Rate", "CPA", "ROAS", "AOV"];
-
-    sheet.getRange(1, 1, 1, headers.length).setValues([headers]).setFontWeight("bold");
+    const headers = ["Search Term", "Campaign", "Ad Group", "Impressions", "Clicks", "Cost", "Conversions", "Conversion Value", "CPC", "CTR", "Conv Rate", "CPA", "ROAS", "AOV"];
 
     // Run the search term query
     const report = AdsApp.report(QUERY);
@@ -69,7 +62,8 @@ function main() {
 
     // Write data to sheet (only if we have data)
     if (data.length > 0) {
-      sheet.getRange(2, 1, data.length, data[0].length).setValues(data);
+      const allData = [headers, ...data];
+      sheet.getRange(1, 1, allData.length, allData[0].length).setValues(allData);
       Logger.log("Successfully wrote " + data.length + " rows to the sheet.");
     } else {
       Logger.log("No data found for the specified criteria.");

@@ -36,7 +36,6 @@ const CATEGORIES = [
   "INFORMATIONAL", // Queries seeking general information
   "NAVIGATIONAL",  // Queries looking for a specific website or page
   "COMMERCIAL",    // Queries with buying intent
-  "TRANSACTIONAL", // Queries indicating immediate purchase intent
   "LOCAL",         // Queries related to local businesses or services
   "QUESTION"       // Queries phrased as questions
 ];

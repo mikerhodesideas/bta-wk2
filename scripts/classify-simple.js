@@ -1,5 +1,5 @@
 /**
- * Google Ads Script to classify search terms using AI models
+ * Google Ads Script to classify search terms using OpenAI models
  * This script reads settings from a Google Sheet, classifies search terms,
  * and outputs results back to the sheet.
  */
@@ -7,10 +7,6 @@
 // Model constants
 const OPENAI_MODEL = "gpt-4o";
 const OPENAI_CHEAP_MODEL = "gpt-4o-mini";
-const ANTHROPIC_MODEL = "claude-3-5-sonnet-latest";
-const ANTHROPIC_CHEAP_MODEL = "claude-3-5-haiku-latest";
-const GOOGLE_MODEL = "gemini-1.5-pro";
-const GOOGLE_CHEAP_MODEL = "gemini-2.0-flash";
 
 // Sheet URL
 const SHEET_URL = "https://docs.google.com/spreadsheets/d/1B60gfk6h-IMCEWYf_qWpS6yySZQD8IUnvh9jz-Wtu5w/edit?gid=117479157#gid=117479157";
@@ -20,7 +16,6 @@ const CATEGORIES = [
   "INFORMATIONAL", // Queries seeking general information
   "NAVIGATIONAL",  // Queries looking for a specific website or page
   "COMMERCIAL",    // Queries with buying intent
-  "TRANSACTIONAL", // Queries indicating immediate purchase intent
   "LOCAL",         // Queries related to local businesses or services
   "QUESTION"       // Queries phrased as questions
 ];
@@ -42,11 +37,11 @@ function main() {
     // Validate settings
     validateSettings(settings);
     
-    // Setup API keys
-    const apiKeys = getAPIKeys(spreadsheet, settings.model);
+    // Setup API key
+    const apiKey = getAPIKey(spreadsheet);
     
     // Classify search terms
-    const results = classifySearchTerms(settings, apiKeys);
+    const results = classifySearchTerms(settings, apiKey);
     
     // Output results
     outputResults(spreadsheet, results);
@@ -70,13 +65,6 @@ function main() {
  */
 function readSettings(spreadsheet) {
   const settings = {};
-  
-  // Read model type
-  try {
-    settings.model = spreadsheet.getRangeByName("model").getValue().toLowerCase();
-  } catch (e) {
-    throw new Error("Could not read 'model' setting. Error: " + e);
-  }
   
   // Read cheap setting
   try {
@@ -106,11 +94,6 @@ function readSettings(spreadsheet) {
  * Validate the settings
  */
 function validateSettings(settings) {
-  // Validate model
-  if (!["openai", "anthropic", "google"].includes(settings.model)) {
-    throw new Error("Invalid model. Must be one of: openai, anthropic, google");
-  }
-  
   // Validate topTerms
   if (!settings.topTerms || !Array.isArray(settings.topTerms) || settings.topTerms.length === 0) {
     throw new Error("No search terms found to classify");
@@ -120,47 +103,33 @@ function validateSettings(settings) {
 }
 
 /**
- * Get API keys from the spreadsheet, using mike_ prefixed keys if available
+ * Get API key from the spreadsheet, using mike_ prefixed key if available
  */
-function getAPIKeys(spreadsheet, model) {
-  let mikeKeyRange, keyRange;
-  
-  switch (model) {
-    case "openai":
-      mikeKeyRange = spreadsheet.getRangeByName("mike_key_openai");
-      keyRange = spreadsheet.getRangeByName("key_openai");
-      break;
-    case "anthropic":
-      mikeKeyRange = spreadsheet.getRangeByName("mike_key_anthropic");
-      keyRange = spreadsheet.getRangeByName("key_anthropic");
-      break;
-    case "google":
-      mikeKeyRange = spreadsheet.getRangeByName("mike_key_google");
-      keyRange = spreadsheet.getRangeByName("key_google");
-      break;
-  }
+function getAPIKey(spreadsheet) {
+  const mikeKeyRange = spreadsheet.getRangeByName("mike_key_openai");
+  const keyRange = spreadsheet.getRangeByName("key_openai");
   
   // Try mike_ key first, then fall back to key_
   let apiKey;
   if (mikeKeyRange && mikeKeyRange.getValue()) {
     apiKey = mikeKeyRange.getValue();
-    Logger.log(`Using mike_key_${model}`);
+    Logger.log("Using mike_key_openai");
   } else if (keyRange && keyRange.getValue()) {
     apiKey = keyRange.getValue();
-    Logger.log(`Using key_${model}`);
+    Logger.log("Using key_openai");
   } else {
-    throw new Error(`No API key found for ${model}`);
+    throw new Error("No OpenAI API key found");
   }
   
   return apiKey;
 }
 
 /**
- * Classify search terms using the selected model
+ * Classify search terms using OpenAI
  */
 function classifySearchTerms(settings, apiKey) {
   const results = [];
-  const modelToUse = getModelVersion(settings.model, settings.cheap);
+  const modelToUse = settings.cheap ? OPENAI_CHEAP_MODEL : OPENAI_MODEL;
   
   Logger.log(`Classifying ${settings.topTerms.length} search terms using ${modelToUse}`);
   
@@ -175,18 +144,7 @@ function classifySearchTerms(settings, apiKey) {
     while (!success && retryCount < 3) {
       try {
         const startTime = new Date().getTime();
-        
-        switch (settings.model) {
-          case "openai":
-            result = classifyWithOpenAI(term, apiKey, modelToUse);
-            break;
-          case "anthropic":
-            result = classifyWithAnthropic(term, apiKey, modelToUse);
-            break;
-          case "google":
-            result = classifyWithGoogle(term, apiKey, modelToUse);
-            break;
-        }
+        result = classifyWithOpenAI(term, apiKey, modelToUse);
         
         const endTime = new Date().getTime();
         const duration = (endTime - startTime) / 1000;
@@ -221,22 +179,6 @@ function classifySearchTerms(settings, apiKey) {
   }
   
   return results;
-}
-
-/**
- * Get the appropriate model version based on model type and 'cheap' setting
- */
-function getModelVersion(model, cheap) {
-  switch (model) {
-    case "openai":
-      return cheap ? OPENAI_CHEAP_MODEL : OPENAI_MODEL;
-    case "anthropic":
-      return cheap ? ANTHROPIC_CHEAP_MODEL : ANTHROPIC_MODEL;
-    case "google":
-      return cheap ? GOOGLE_CHEAP_MODEL : GOOGLE_MODEL;
-    default:
-      throw new Error(`Unknown model type: ${model}`);
-  }
 }
 
 /**
@@ -325,175 +267,6 @@ Respond with ONLY a JSON object in this EXACT format:
     return result;
   } catch (e) {
     throw new Error(`Failed to parse OpenAI response: ${e}. Response was: ${text}`);
-  }
-}
-
-/**
- * Classify a search term using Anthropic
- */
-function classifyWithAnthropic(term, apiKey, model) {
-  Logger.log(`Classifying with Anthropic: "${term}" using ${model}`);
-  
-  const prompt = `Classify the following search term into exactly one of these categories: 
-${CATEGORIES.join(", ")}
-
-Search term: "${term}"
-
-Respond with ONLY a JSON object in this EXACT format:
-{
-  "category": "ONE_OF_THE_CATEGORIES_ABOVE",
-  "confidence": 0.XX (a number between 0 and 1)
-}`;
-  
-  const url = 'https://api.anthropic.com/v1/messages';
-  const message = [
-    { 'role': 'user', 'content': prompt }
-  ];
-  
-  const payload = {
-    'messages': message,
-    'model': model,
-    'max_tokens': 500
-  };
-  
-  const httpOptions = {
-    'method': 'POST',
-    'muteHttpExceptions': true,
-    'contentType': 'application/json',
-    'headers': {
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01'
-    },
-    'payload': JSON.stringify(payload)
-  };
-  
-  let response = UrlFetchApp.fetch(url, httpOptions);
-  let responseCode = response.getResponseCode();
-  let responseContent = response.getContentText();
-  
-  const startTime = Date.now();
-  while (responseCode !== 200 && Date.now() - startTime < 30000) {
-    Utilities.sleep(5000);
-    response = UrlFetchApp.fetch(url, httpOptions);
-    responseCode = response.getResponseCode();
-    responseContent = response.getContentText();
-    Logger.log('Time elapsed: ' + (Date.now() - startTime) / 1000 + ' seconds');
-  }
-  
-  if (responseCode !== 200) {
-    Logger.log(`Error: Anthropic API request failed with status ${responseCode}.`);
-    try {
-      const errorResponse = JSON.parse(responseContent);
-      throw new Error(errorResponse.error.message);
-    } catch (e) {
-      throw new Error(`Anthropic error (${responseCode}): ${responseContent}`);
-    }
-  }
-  
-  const responseJson = JSON.parse(responseContent);
-  let answerText;
-  
-  if (responseJson && responseJson.content && responseJson.content.length > 0) {
-    answerText = responseJson.content[0].text;
-  } else {
-    throw new Error('No answer found in the Anthropic response');
-  }
-  
-  try {
-    // Extract JSON from response
-    const jsonMatch = answerText.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      throw new Error("No JSON found in response");
-    }
-    
-    const result = JSON.parse(jsonMatch[0]);
-    
-    // Validate result
-    if (!result.category || !CATEGORIES.includes(result.category)) {
-      throw new Error(`Invalid category: ${result.category}`);
-    }
-    
-    if (typeof result.confidence !== 'number' || result.confidence < 0 || result.confidence > 1) {
-      Logger.log(`Invalid confidence value: ${result.confidence}, setting to 0.5`);
-      result.confidence = 0.5;
-    }
-    
-    return result;
-  } catch (e) {
-    throw new Error(`Failed to parse Anthropic response: ${e}. Response was: ${answerText}`);
-  }
-}
-
-/**
- * Classify a search term using Google's Gemini
- */
-function classifyWithGoogle(term, apiKey, model) {
-  Logger.log(`Classifying with Google: "${term}" using ${model}`);
-  
-  const prompt = `Classify the following search term into exactly one of these categories: 
-${CATEGORIES.join(", ")}
-
-Search term: "${term}"
-
-Respond with ONLY a JSON object in this EXACT format:
-{
-  "category": "ONE_OF_THE_CATEGORIES_ABOVE",
-  "confidence": 0.XX (a number between 0 and 1)
-}`;
-  
-  const data = {
-    'contents': [{
-      'parts': [{
-        'text': prompt
-      }]
-    }],
-    'generationConfig': {
-      'maxOutputTokens': 500
-    }
-  };
-  
-  const httpOptions = {
-    'method': 'post',
-    'contentType': 'application/json',
-    'payload': JSON.stringify(data)
-  };
-  
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
-  
-  let response = UrlFetchApp.fetch(url, httpOptions);
-  let responseCode = response.getResponseCode();
-  let responseContent = response.getContentText();
-  
-  if (responseCode !== 200) {
-    Logger.log(`Error: Google API request failed with status ${responseCode}.`);
-    throw new Error(`Google API error (${responseCode}): ${responseContent}`);
-  }
-  
-  const responseJson = JSON.parse(responseContent);
-  const text = responseJson.candidates[0].content.parts[0].text;
-  
-  try {
-    // Extract JSON from response
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      throw new Error("No JSON found in response");
-    }
-    
-    const result = JSON.parse(jsonMatch[0]);
-    
-    // Validate result
-    if (!result.category || !CATEGORIES.includes(result.category)) {
-      throw new Error(`Invalid category: ${result.category}`);
-    }
-    
-    if (typeof result.confidence !== 'number' || result.confidence < 0 || result.confidence > 1) {
-      Logger.log(`Invalid confidence value: ${result.confidence}, setting to 0.5`);
-      result.confidence = 0.5;
-    }
-    
-    return result;
-  } catch (e) {
-    throw new Error(`Failed to parse Google response: ${e}. Response was: ${text}`);
   }
 }
 
