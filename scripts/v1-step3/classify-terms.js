@@ -1,8 +1,6 @@
-
+// classify search terms using openAI
 const OPENAI_MODEL = "gpt-4o-mini";
 const SHEET_ID = "1B60gfk6h-IMCEWYf_qWpS6yySZQD8IUnvh9jz-Wtu5w";
-
-
 
 // Cost per million tokens (in USD)
 const COST_PER_1M_INPUT_TOKENS = 0.15;

@@ -1,7 +1,7 @@
-const SHEET_URL = ''; // leave blank or add a sheet here
+const SHEET_URL = 'https://docs.google.com/spreadsheets/d/1QgNpe-HniHsMPLdHicegAg1ka01l-GNKbvOw_XBMNTM/edit?gid=0#gid=0'; // leave blank or add a sheet here
 const TAB = 'SearchTerms';
 
-const mike_test = 'https://docs.google.com/spreadsheets/d/1B60gfk6h-IMCEWYf_qWpS6yySZQD8IUnvh9jz-Wtu5w/edit'
+const mike_test = ''
 
 // GAQL query for search terms
 const QUERY = `

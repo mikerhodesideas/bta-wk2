@@ -107,6 +107,21 @@ function readSettings(spreadsheet) {
     throw new Error("Could not read 'cheap' setting. Error: " + e);
   }
 
+  // Read batch size setting (default to 10 if not found)
+  try {
+    const batchSizeRange = spreadsheet.getRangeByName("batchSize");
+    if (batchSizeRange) {
+      const batchSizeValue = parseInt(batchSizeRange.getValue(), 10);
+      settings.batchSize = isNaN(batchSizeValue) || batchSizeValue < 1 ? 10 : batchSizeValue;
+    } else {
+      settings.batchSize = 10;
+      Logger.log("No batchSize setting found, defaulting to 10");
+    }
+  } catch (e) {
+    settings.batchSize = 10;
+    Logger.log(`Could not read 'batchSize' setting, defaulting to 10. Error: ${e}`);
+  }
+
   // Read top terms
   try {
     const topTermsRange = spreadsheet.getRangeByName("topTerms");
@@ -177,66 +192,120 @@ function getAPIKeys(spreadsheet, model) {
 }
 
 /**
- * Classify search terms using the selected model
+ * Generic retry function for API calls
+ * @param {Function} apiCallFn - The function that makes the API call
+ * @param {number} maxRetries - Maximum number of retries (default 3)
+ * @returns {Object} - The result of the successful API call
+ */
+function retryApiCall(apiCallFn, maxRetries = 3) {
+  let retryCount = 0;
+  let lastError;
+
+  while (retryCount < maxRetries) {
+    try {
+      return apiCallFn();
+    } catch (error) {
+      retryCount++;
+      lastError = error;
+      Logger.log(`API call failed (attempt ${retryCount}/${maxRetries}): ${error}`);
+
+      if (retryCount < maxRetries) {
+        // Exponential backoff
+        const waitTime = Math.pow(2, retryCount) * 1000;
+        Logger.log(`Waiting ${waitTime}ms before retry...`);
+        Utilities.sleep(waitTime);
+      }
+    }
+  }
+
+  // If we got here, all retries failed
+  throw lastError;
+}
+
+/**
+ * Classify search terms using the selected model with batch processing
  */
 function classifySearchTerms(settings, apiKey) {
   const results = [];
   const modelToUse = getModelVersion(settings.model, settings.cheap);
+  const batchSize = settings.batchSize || 10;
 
+  const totalTerms = settings.topTerms.length;
+  const numBatches = Math.ceil(totalTerms / batchSize);
 
-  for (let i = 0; i < settings.topTerms.length; i++) {
-    const term = settings.topTerms[i];
+  Logger.log(`Classifying ${totalTerms} search terms using ${modelToUse}`);
+  Logger.log(`Processing in ${numBatches} batches of up to ${batchSize} terms each`);
 
-    let retryCount = 0;
-    let success = false;
-    let result;
+  for (let batchIndex = 0; batchIndex < numBatches; batchIndex++) {
+    // Calculate batch start and end indices
+    const startIdx = batchIndex * batchSize;
+    const endIdx = Math.min(startIdx + batchSize, totalTerms);
+    const currentBatchSize = endIdx - startIdx;
 
-    while (!success && retryCount < 3) {
+    Logger.log(`Processing batch ${batchIndex + 1}/${numBatches} (terms ${startIdx + 1}-${endIdx})`);
+
+    // Process each term in the batch
+    for (let i = 0; i < currentBatchSize; i++) {
+      const termIndex = startIdx + i;
+      const term = settings.topTerms[termIndex];
+
+      Logger.log(`Processing term ${termIndex + 1}/${totalTerms}: ${term}`);
+
       try {
         const startTime = new Date().getTime();
 
+        // Use the appropriate classification function
+        let classifyFn;
         switch (settings.model) {
           case "openai":
-            result = classifyWithOpenAI(term, apiKey, modelToUse);
+            classifyFn = () => classifyWithOpenAI(term, apiKey, modelToUse);
             break;
           case "anthropic":
-            result = classifyWithAnthropic(term, apiKey, modelToUse);
+            classifyFn = () => classifyWithAnthropic(term, apiKey, modelToUse);
             break;
           case "google":
-            result = classifyWithGoogle(term, apiKey, modelToUse);
+            classifyFn = () => classifyWithGoogle(term, apiKey, modelToUse);
             break;
         }
+
+        // Use the retry function
+        const result = retryApiCall(classifyFn);
 
         const endTime = new Date().getTime();
         const duration = (endTime - startTime) / 1000;
 
-        result.term = term;
-        result.duration = duration;
-        success = true;
-      } catch (error) {
-        retryCount++;
-        Logger.log(`Error classifying term "${term}" (attempt ${retryCount}/3): ${error}`);
+        Logger.log(`Classification for "${term}" completed in ${duration} seconds`);
 
-        if (retryCount < 3) {
-          // Exponential backoff
-          const waitTime = Math.pow(2, retryCount) * 1000;
-          Logger.log(`Waiting ${waitTime}ms before retry...`);
-          Utilities.sleep(waitTime);
-        } else {
-          // After 3 attempts, record the error
-          result = {
-            term: term,
-            category: "ERROR",
-            confidence: 0,
-            error: error.toString()
-          };
-        }
+        results.push({
+          term: term,
+          category: result.category,
+          confidence: result.confidence,
+          duration: duration
+        });
+
+      } catch (error) {
+        // After all retries failed
+        Logger.log(`All retries failed for term "${term}": ${error}`);
+        results.push({
+          term: term,
+          category: "ERROR",
+          confidence: 0,
+          error: error.toString()
+        });
       }
+
+      // Simple progress indicator
+      const progress = Math.floor(((termIndex + 1) / totalTerms) * 100);
+      Logger.log(`Progress: ${progress}% (${termIndex + 1}/${totalTerms})`);
     }
 
-    results.push(result);
+    // If there are more batches and this isn't the last one, log a pause message
+    if (batchIndex < numBatches - 1) {
+      Logger.log(`Completed batch ${batchIndex + 1}/${numBatches}. Moving to next batch...`);
+    }
   }
 
+  Logger.log(`Classification complete. Processed ${results.length} search terms.`);
   return results;
 }
 
@@ -257,10 +326,81 @@ function getModelVersion(model, cheap) {
 }
 
 /**
+ * Validates and parses the JSON response from any AI provider
+ * @param {string} responseText - The text response from the AI
+ * @returns {Object} - The parsed and validated result
+ */
+function validateClassificationResult(responseText) {
+  // Extract JSON from response
+  const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) {
+    throw new Error("No JSON found in response");
+  }
+
+  const result = JSON.parse(jsonMatch[0]);
+
+  // Validate result
+  if (!result.category || !CATEGORIES.includes(result.category)) {
+    throw new Error(`Invalid category: ${result.category}`);
+  }
+
+  if (typeof result.confidence !== 'number' || result.confidence < 0 || result.confidence > 1) {
+    Logger.log(`Invalid confidence value: ${result.confidence}, setting to 0.5`);
+    result.confidence = 0.5;
+  }
+
+  return result;
+}
+
+/**
+ * Estimate token count for a string
+ * This is a rough estimate (4 chars per token) when the API doesn't provide counts
+ * @param {string} text - The text to estimate tokens for
+ * @returns {number} - Estimated token count
+ */
+function estimateTokenCount(text) {
+  if (!text) return 0;
+  // Simple estimate: ~4 characters per token on average
+  return Math.ceil(text.length / 4);
+}
+
+/**
+ * Update token counts with actual or estimated values
+ * @param {Object} apiResponse - The API response object
+ * @param {string} prompt - The prompt text (for estimation if needed)
+ * @param {string} response - The response text (for estimation if needed)
+ * @param {string} provider - The API provider (openai, anthropic, or google)
+ */
+function updateTokenCounts(apiResponse, prompt, response, provider) {
+  // Default to estimation
+  let inputTokens = estimateTokenCount(prompt);
+  let outputTokens = estimateTokenCount(response);
+
+  // Try to get actual token counts from the API response
+  if (provider === "openai" && apiResponse.usage) {
+    inputTokens = apiResponse.usage.prompt_tokens;
+    outputTokens = apiResponse.usage.completion_tokens;
+  } else if (provider === "anthropic" && apiResponse.usage) {
+    inputTokens = apiResponse.usage.input_tokens;
+    outputTokens = apiResponse.usage.output_tokens;
+  } else if (provider === "google" && apiResponse.usageMetadata) {
+    inputTokens = apiResponse.usageMetadata.promptTokenCount;
+    outputTokens = apiResponse.usageMetadata.candidatesTokenCount;
+  } else {
+    Logger.log(`No token count available from ${provider}, using estimate: in=${inputTokens}, out=${outputTokens}`);
+  }
+
+  // Update global token counts
+  tokenCounts.input += inputTokens;
+  tokenCounts.output += outputTokens;
+
+  return { input: inputTokens, output: outputTokens };
+}
+
+/**
  * Classify a search term using OpenAI
  */
 function classifyWithOpenAI(term, apiKey, model) {
-
   const prompt = `Classify the following search term into exactly one of these categories: 
 ${CATEGORIES.join(", ")}
 
@@ -295,34 +435,14 @@ Respond with ONLY a JSON object in this EXACT format:
   const response = UrlFetchApp.fetch(url, httpOptions);
   const responseJson = JSON.parse(response.getContentText());
 
-  // Track token usage
-  if (responseJson.usage) {
-    tokenCounts.input += responseJson.usage.prompt_tokens;
-    tokenCounts.output += responseJson.usage.completion_tokens;
-  }
-
+  // Get the content from the response
   const text = responseJson.choices[0].message.content;
 
+  // Track token usage
+  updateTokenCounts(responseJson, prompt, text, "openai");
+
   try {
-    // Extract JSON from response
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      throw new Error("No JSON found in response");
-    }
-
-    const result = JSON.parse(jsonMatch[0]);
-
-    // Validate result
-    if (!result.category || !CATEGORIES.includes(result.category)) {
-      throw new Error(`Invalid category: ${result.category}`);
-    }
-
-    if (typeof result.confidence !== 'number' || result.confidence < 0 || result.confidence > 1) {
-      Logger.log(`Invalid confidence value: ${result.confidence}, setting to 0.5`);
-      result.confidence = 0.5;
-    }
-
-    return result;
+    return validateClassificationResult(text);
   } catch (e) {
     throw new Error(`Failed to parse OpenAI response: ${e}. Response was: ${text}`);
   }
@@ -332,7 +452,6 @@ Respond with ONLY a JSON object in this EXACT format:
  * Classify a search term using Anthropic
  */
 function classifyWithAnthropic(term, apiKey, model) {
-
   const prompt = `Classify the following search term into exactly one of these categories: 
 ${CATEGORIES.join(", ")}
 
@@ -390,13 +509,6 @@ Respond with ONLY a JSON object in this EXACT format:
   }
 
   const responseJson = JSON.parse(responseContent);
-
-  // Track token usage - Anthropic provides this in response.usage
-  if (responseJson.usage) {
-    tokenCounts.input += responseJson.usage.input_tokens;
-    tokenCounts.output += responseJson.usage.output_tokens;
-  }
-
   let answerText;
 
   if (responseJson && responseJson.content && responseJson.content.length > 0) {
@@ -405,26 +517,11 @@ Respond with ONLY a JSON object in this EXACT format:
     throw new Error('No answer found in the Anthropic response');
   }
 
+  // Track token usage
+  updateTokenCounts(responseJson, prompt, answerText, "anthropic");
+
   try {
-    // Extract JSON from response
-    const jsonMatch = answerText.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      throw new Error("No JSON found in response");
-    }
-
-    const result = JSON.parse(jsonMatch[0]);
-
-    // Validate result
-    if (!result.category || !CATEGORIES.includes(result.category)) {
-      throw new Error(`Invalid category: ${result.category}`);
-    }
-
-    if (typeof result.confidence !== 'number' || result.confidence < 0 || result.confidence > 1) {
-      Logger.log(`Invalid confidence value: ${result.confidence}, setting to 0.5`);
-      result.confidence = 0.5;
-    }
-
-    return result;
+    return validateClassificationResult(answerText);
   } catch (e) {
     throw new Error(`Failed to parse Anthropic response: ${e}. Response was: ${answerText}`);
   }
@@ -474,35 +571,13 @@ Respond with ONLY a JSON object in this EXACT format:
   }
 
   const responseJson = JSON.parse(responseContent);
-
-  // Track token usage from usageMetadata
-  if (responseJson.usageMetadata) {
-    tokenCounts.input += responseJson.usageMetadata.promptTokenCount;
-    tokenCounts.output += responseJson.usageMetadata.candidatesTokenCount;
-  }
-
   const text = responseJson.candidates[0].content.parts[0].text;
 
+  // Track token usage
+  updateTokenCounts(responseJson, prompt, text, "google");
+
   try {
-    // Extract JSON from response
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      throw new Error("No JSON found in response");
-    }
-
-    const result = JSON.parse(jsonMatch[0]);
-
-    // Validate result
-    if (!result.category || !CATEGORIES.includes(result.category)) {
-      throw new Error(`Invalid category: ${result.category}`);
-    }
-
-    if (typeof result.confidence !== 'number' || result.confidence < 0 || result.confidence > 1) {
-      Logger.log(`Invalid confidence value: ${result.confidence}, setting to 0.5`);
-      result.confidence = 0.5;
-    }
-
-    return result;
+    return validateClassificationResult(text);
   } catch (e) {
     throw new Error(`Failed to parse Google response: ${e}. Response was: ${text}`);
   }
@@ -577,7 +652,7 @@ function logErrorToSheet(spreadsheet, error) {
 }
 
 /**
- * Calculate total cost based on token usage
+ * Calculate total cost based on token usage and add summary to Results sheet
  */
 function calculateCost(model, tokenCounts) {
   const costs = TOKEN_COSTS[model];
@@ -591,8 +666,40 @@ function calculateCost(model, tokenCounts) {
   const totalCost = inputCost + outputCost;
 
   Logger.log(`Token usage - Input: ${tokenCounts.input}, Output: ${tokenCounts.output}`);
-  Logger.log(`Cost breakdown - Input: $${inputCost.toFixed(4)}, Output: $${outputCost.toFixed(3)}`);
-  Logger.log(`Total cost: $${totalCost.toFixed(3)}`);
+  Logger.log(`Cost breakdown - Input: $${inputCost.toFixed(4)}, Output: $${outputCost.toFixed(4)}`);
+  Logger.log(`Total cost: $${totalCost.toFixed(4)}`);
+
+  // Add cost information to spreadsheet
+  try {
+    const spreadsheet = SpreadsheetApp.openByUrl(SHEET_URL);
+    const resultsSheet = spreadsheet.getSheetByName("Results");
+
+    if (resultsSheet) {
+      // Add a few blank rows
+      const dataRows = resultsSheet.getLastRow();
+      const summaryStartRow = dataRows + 3;
+
+      // Add summary data
+      resultsSheet.getRange(summaryStartRow, 1).setValue("SUMMARY");
+      resultsSheet.getRange(summaryStartRow, 1).setFontWeight("bold");
+
+      resultsSheet.getRange(summaryStartRow + 1, 1, 5, 2).setValues([
+        ["Model Used", model],
+        ["Input Tokens", tokenCounts.input],
+        ["Output Tokens", tokenCounts.output],
+        ["Total Tokens", tokenCounts.input + tokenCounts.output],
+        ["Estimated Cost", `$${totalCost.toFixed(4)}`]
+      ]);
+
+      // Highlight the cost information
+      resultsSheet.getRange(summaryStartRow + 4, 2).setBackground("#e6f2ff");
+      resultsSheet.getRange(summaryStartRow + 4, 2).setFontWeight("bold");
+
+      Logger.log("Cost summary added to Results sheet");
+    }
+  } catch (e) {
+    Logger.log(`Could not add cost summary to sheet: ${e}`);
+  }
 
   return totalCost;
 }

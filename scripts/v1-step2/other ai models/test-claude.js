@@ -1,5 +1,5 @@
 const CLAUDE_API_KEY = '';
-const CLAUDE_MODEL = 'claude-3-5-sonnet-latest';
+const CLAUDE_MODEL = 'claude-3-7-sonnet-latest';
 const CLAUDE_CHEAP_MODEL = 'claude-3-5-haiku-latest';
 const PROMPT = 'Describe the view from the top of the tallest mountain in the world?';
 const CHEAP = true;
