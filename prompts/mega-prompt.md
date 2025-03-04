@@ -1,4 +1,4 @@
-# Google Ads Script Development Task
+# Google Ads Script Development Task aka the Mega Prompt
 
 ## Overview
 You are an experienced Google Ads script developer tasked with creating a script that generates reports based on specific requirements. 
@@ -304,7 +304,8 @@ function workWithSharedNegativeLists() {
         const campaignIterator = sharedSet.campaigns().get();
         
         while (campaignIterator.hasNext()) {
-            campaignsWithList.push(campaignIterator.next().getName());
+            const campaign = campaignIterator.next();
+            campaignsWithList.push(campaign['campaign.name'] || campaign.getName());
         }
         
         // Get all negative keywords in this shared list
@@ -314,8 +315,8 @@ function workWithSharedNegativeLists() {
         while (negKeywordIterator.hasNext()) {
             const negKeyword = negKeywordIterator.next();
             negKeywords.push({
-                text: negKeyword.getText(),
-                matchType: negKeyword.getMatchType()
+                text: negKeyword['keyword.text'] || negKeyword.getText(),
+                matchType: negKeyword['keyword.match_type'] || negKeyword.getMatchType()
             });
         }
 
@@ -353,11 +354,12 @@ function getNegativeKeywordsWithGAQL() {
     while (campaignNegativeIterator.hasNext()) {
         const row = campaignNegativeIterator.next();
         
-        const campaignId = row.campaign.id;
-        const campaignName = row.campaign.name;
-        const keywordText = row.campaignCriterion.keyword.text;
-        const matchType = row.campaignCriterion.keyword.matchType;
-        const status = row.campaignCriterion.status;
+        // Access fields using bracket notation with full paths
+        const campaignId = row['campaign.id'] || '';
+        const campaignName = row['campaign.name'] || '';
+        const keywordText = row['campaign_criterion.keyword.text'] || '';
+        const matchType = row['campaign_criterion.keyword.match_type'] || '';
+        const status = row['campaign_criterion.status'] || '';
         
         negativeKeywords.push({
             campaignId,
@@ -380,10 +382,6 @@ function getNegativeKeywordsWithGAQL() {
             neg.matchType,
             neg.status
         ]);
-        
-        // Add your spreadsheet code here if needed
-        // spreadsheet.getRange(1, 1, 1, headers.length).setValues([headers]);
-        // spreadsheet.getRange(2, 1, rows.length, headers.length).setValues(rows);
     }
     
     return negativeKeywords;
@@ -432,37 +430,39 @@ function debugQueryResults(query) {
     // Log the structure of the first row
     const firstRow = rows.next();
     Logger.log("First row structure:");
+    
+    // Log all available fields with their full paths
     for (let field in firstRow) {
-        Logger.log(`Field: ${field}, Value: ${firstRow[field]}, Type: ${typeof firstRow[field]}`);
-        
-        // If the field is an object, inspect its properties
-        if (typeof firstRow[field] === 'object' && firstRow[field] !== null) {
-            for (let subField in firstRow[field]) {
-                Logger.log(`  └─ ${field}.${subField}: ${firstRow[field][subField]}`);
-            }
-        }
+        const value = firstRow[field];
+        Logger.log(`Field: ${field}, Value: ${value}, Type: ${typeof value}`);
     }
     
-    // Log available metrics fields directly
+    // Log metrics fields check
     Logger.log("Metrics fields check:");
     try {
-        if (firstRow['metrics']) {
-            for (let metric in firstRow['metrics']) {
-                Logger.log(`metrics.${metric}: ${firstRow['metrics'][metric]}`);
-            }
-        } else {
-            Logger.log("metrics object not available in row");
-        }
-        
-        // Check specific metrics with bracket notation
-        const testMetrics = ['metrics.impressions', 'metrics.clicks', 'metrics.cost_micros', 
-                            'metrics.conversions', 'metrics.conversions_value'];
+        // Check specific metrics with full path notation
+        const testMetrics = [
+            'metrics.impressions',
+            'metrics.clicks',
+            'metrics.cost_micros',
+            'metrics.conversions',
+            'metrics.conversions_value'
+        ];
         
         for (let metricPath of testMetrics) {
-            Logger.log(`${metricPath}: ${firstRow[metricPath]}, type: ${typeof firstRow[metricPath]}`);
+            const value = firstRow[metricPath];
+            const numericValue = Number(value) || 0;
+            Logger.log(`${metricPath}: ${value} (${typeof value}) -> ${numericValue} (number)`);
+        }
+        
+        // Log any additional metrics found
+        for (let field in firstRow) {
+            if (field.startsWith('metrics.')) {
+                const value = firstRow[field];
+                Logger.log(`Additional metric - ${field}: ${value}`);
+            }
         }
     } catch (e) {
         Logger.log("Error inspecting metrics: " + e);
     }
 }
-
