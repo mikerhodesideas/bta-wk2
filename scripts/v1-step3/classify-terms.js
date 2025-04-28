@@ -4,8 +4,8 @@
 // and run the script
 
 
-const SHEET_URL = "https://docs.google.com/spreadsheets/d/1B60gfk6h-IMCEWYf_qWpS6yySZQD8IUnvh9jz-Wtu5w/";
-const OPENAI_MODEL = "gpt-4o-mini";
+const SHEET_URL = ''    // enter sheet url here
+const OPENAI_MODEL = 'gpt-4o-mini'
 
 // Cost per million tokens (in USD)
 const COST_PER_1M_INPUT_TOKENS = 0.15;
