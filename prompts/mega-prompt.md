@@ -15,7 +15,7 @@ The script will work with the following input variables:
 The Google Ads script must adhere to these guidelines:
 
 1. Use GAQL (Google Ads Query Language) instead of the old AWQL
-2. Write concise and robust code
+2. Write concise and robust code. No excessive logs unless user requests them.
 3. Use 'let' or 'const' for variable declarations, never 'var'
 4. Use new lowercase resources (e.g., 'keywords' instead of 'KEYWORDS_REPORT')
 5. Pay attention to correct metric names, especially 'metrics.conversions_value' (not 'metrics.conversion_value')
@@ -25,23 +25,72 @@ The Google Ads script must adhere to these guidelines:
 You should assume cost descending if you think that's appropriate, if cost is not part of the query then choose something appropriate.
 8. Minimize calls to the sheet to keep the execution time of the script as low as possible. **Crucially, always use `setValues()` to write data in bulk to the sheet. NEVER use `appendRow()` as it is significantly slower.**
 9. If the user doesn't provide a SHEET_URL in the prompt, that's fine. use the example code provided to create one and log the url to the console
+10. Don't create derived metrics unless the user asks for them.
+
 
 REMEMBER you are allowed to ask the user questions but only BEFORE you start to write code. Never include inputs in the code or script itself.
 
+## CRITICAL: Field Naming Conventions (Snake vs Camel Case)
+The most common source of errors in Google Ads scripts comes from confusing field naming conventions:
+
+1. **GAQL QUERIES**: Use snake_case with underscores:
+   - `search_term_view.search_term`
+   - `metrics.cost_micros`
+   - `ad_group.name`
+
+2. **JAVASCRIPT OBJECT ACCESS**: Use camelCase without underscores:
+   - `row.searchTermView.searchTerm` (NOT row.search_term_view.search_term)
+   - `row.metrics.costMicros` (NOT row.metrics.cost_micros)
+   - `row.adGroup.name` (NOT row.ad_group.name)
+
+This discrepancy is NOT optional and WILL cause your script to fail if ignored. The Google Ads API returns property names in camelCase format regardless of how you write the GAQL query.
+
+**Always log the structure of the first row** with `Logger.log(JSON.stringify(row))` to verify the actual property names before processing the data. This is the ONLY reliable way to determine the correct field names.
+
+Example of proper sample row logging:
+```javascript
+// Log sample row for field name verification
+const sampleQuery = QUERY + ' LIMIT 1';
+const sampleRows = AdsApp.search(sampleQuery);
+if (sampleRows.hasNext()) {
+    const sampleRow = sampleRows.next();
+    Logger.log("Sample row structure: " + JSON.stringify(sampleRow));
+    // Also log important nested objects separately
+    Logger.log("metrics object: " + JSON.stringify(sampleRow.metrics));
+}
+```
+
 ## Data Handling and Type Conversion
 When working with Google Ads API data, follow these critical practices:
-1. Access query results using bracket notation with the full field path as a string
-   - Correct: `row['metrics.impressions']`
-   - Incorrect: `row.metrics.impressions` or `row.metrics['impressions']`
-2. ALWAYS convert metric values to numbers using Number():
-   - `const impressions = Number(row['metrics.impressions'])`
-   - This applies to ALL metrics (impressions, clicks, cost_micros, conversions, etc.)
-3. Handle null/undefined values with fallbacks:
-   - `const impressions = Number(row['metrics.impressions']) || 0`
-   - This prevents NaN errors in calculations
+1. Access **nested object fields** (like metrics, campaign details, etc.) using standard object property access (dot notation or bracket notation for the object, then the property). **Crucially, the API often returns these as nested objects, not flattened strings.**
+   - **Correct:** `row.metrics.impressions` or `row['metrics']['impressions']`
+   - **Incorrect:** `row['metrics.impressions']` (This fails because `metrics` is an object, not a flat property named 'metrics.impressions')
+   - **Note:** Top-level fields (like `search_term_view.search_term` if not nested under `searchTermView`) might be accessed directly using bracket notation: `row['search_term_view.search_term']`. **Always check the structure logged from the first row to confirm.**
+2. ALWAYS convert **metric values** (once accessed correctly) to numbers using `Number()`:
+   - `const impressions = Number(row.metrics.impressions)`
+   - This applies to ALL metrics retrieved from the `metrics` object.
+3. Handle null/undefined values with fallbacks *after* attempting access:
+   - `const impressions = Number(row.metrics.impressions) || 0`
+   - This prevents NaN errors in calculations if a metric is missing or null.
 4. Validate data structure before processing:
-   - Log the first row structure to verify field access patterns
-   - Check that metrics exist and have expected formats
+   - **Log the first row structure** using `Logger.log(JSON.stringify(firstRow))` or iterate through its keys to verify field names and nesting. This is the *most reliable* way to determine the correct access pattern for your specific query.
+   - Check that nested objects (like `row.metrics`) and the specific metrics within them exist before trying to access their properties, especially within try/catch blocks.
+
+## Common Google Ads Script Pitfalls
+
+1. **Iterator Methods**: Google Ads iterators do NOT have a `reset()` method. If you need to examine a row before full processing, use a separate query execution with `LIMIT 1`.
+
+2. **Cost Conversion**: All cost values are returned in micros (millionths of the currency unit). Always divide by 1,000,000 to get the actual currency amount:
+   ```javascript
+   const cost = Number(row.metrics.costMicros) / 1000000;
+   ```
+
+3. **Data Types**: All metrics from the API come as strings, even numeric values. ALWAYS convert them to numbers:
+   ```javascript
+   const clicks = Number(row.metrics.clicks) || 0;
+   ```
+
+4. **Error Handling**: Always use try/catch blocks when processing rows and continue with other rows when errors occur.
 
 ## Planning Requirements
 Before writing the script, think through and document the following steps 
@@ -187,57 +236,84 @@ AND campaign.advertising_channel_type = "SEARCH"
 ```javascript
 function calculateMetrics(sheet, rows) {
     let data = [];
-    
+
+    // Use a separate query for the sample row to avoid consuming the main iterator
+    const sampleQuery = QUERY + ' LIMIT 1'; // Or reuse the original query if LIMIT is not feasible
+    const sampleRows = AdsApp.search(sampleQuery);
+
     // Log first row structure to debug field access patterns
-    if (rows.hasNext()) {
-        const sampleRow = rows.next();
+    if (sampleRows.hasNext()) {
+        const sampleRow = sampleRows.next();
         Logger.log("Sample row structure for debugging:");
-        for (let key in sampleRow) {
-            Logger.log(`${key}: ${sampleRow[key]}`);
+        // Log the raw object structure
+        Logger.log(JSON.stringify(sampleRow));
+
+        // Optionally log specific nested objects like metrics
+        if (sampleRow.metrics) {
+             Logger.log("Sample metrics object: " + JSON.stringify(sampleRow.metrics));
         }
-        
-        // Reset iterator by creating a new one
-        rows = AdsApp.search(QUERY);
+         if (sampleRow.campaign) {
+             Logger.log("Sample campaign object: " + JSON.stringify(sampleRow.campaign));
+        }
+        // Add other relevant objects (searchTermView, adGroup, etc.) as needed
+
+    } else {
+        Logger.log("Query returned no rows for sample check.");
     }
-   
+
+    // Process the main query results
     while (rows.hasNext()) {
         try {
             let row = rows.next();
-            
-            // Access dimensions using bracket notation with full paths
-            let dimensionA = row['dimensionA'] || '';
-            let dimensionB = row['dimensionB'] || '';
-            
-            // ALWAYS convert metrics to numbers and handle null/undefined
-            let impressions = Number(row['metrics.impressions']) || 0;
-            let clicks = Number(row['metrics.clicks']) || 0;
-            let costMicros = Number(row['metrics.cost_micros']) || 0;
-            let conversions = Number(row['metrics.conversions']) || 0;
-            let conversionValue = Number(row['metrics.conversions_value']) || 0;
-            
+
+            // --- Corrected Data Access ---
+            // Access dimensions (assuming they might be nested or top-level - CHECK LOGS!)
+            // Example: If campaign name is nested under 'campaign' object
+            let campaignName = row.campaign ? row.campaign.name : 'N/A';
+            // Example: If search term is nested under 'searchTermView' object
+            let searchTerm = row.searchTermView ? row.searchTermView.searchTerm : 'N/A';
+            // Example: If a dimension was directly selected (less common for complex objects)
+            // let dimensionA = row['some_top_level_dimension'] || '';
+
+
+            // Access metrics nested within the 'metrics' object
+            // Use fallback || {} in case the metrics object itself is missing
+            const metrics = row.metrics || {};
+            let impressions = Number(metrics.impressions) || 0;
+            let clicks = Number(metrics.clicks) || 0;
+            // **Important:** Cost is often cost_micros
+            let costMicros = Number(metrics.costMicros) || 0;
+            let conversions = Number(metrics.conversions) || 0;
+            let conversionValue = Number(metrics.conversionsValue) || 0; // Note: conversionsValue
+
+            // --- End Corrected Data Access ---
+
             // Calculate metrics
-            let cost     = costMicros / 1000000;  // Convert micros to actual currency
-            let cpc      = clicks > 0 ? cost / clicks : 0;
-            let ctr      = impressions > 0 ? clicks / impressions : 0;
+            let cost = costMicros / 1000000; // Convert micros to actual currency
+            let cpc = clicks > 0 ? cost / clicks : 0;
+            let ctr = impressions > 0 ? clicks / impressions : 0;
             let convRate = clicks > 0 ? conversions / clicks : 0;
-            let cpa      = conversions > 0 ? cost / conversions : 0;
-            let roas     = cost > 0 ? conversionValue / cost : 0;
-            let aov      = conversions > 0 ? conversionValue / conversions : 0;
-            
+            let cpa = conversions > 0 ? cost / conversions : 0;
+            let roas = cost > 0 ? conversionValue / cost : 0;
+            let aov = conversions > 0 ? conversionValue / conversions : 0;
+
             // Add all variables and calculated metrics to a new row
+            // Adjust the order based on your headers and required dimensions
             let newRow = [
-                dimensionA, dimensionB, impressions, clicks, cost, conversions, conversionValue, 
+                searchTerm, // Example dimension
+                campaignName, // Example dimension
+                impressions, clicks, cost, conversions, conversionValue,
                 cpc, ctr, convRate, cpa, roas, aov
             ];
-            
+
             // push new row to the end of data array
             data.push(newRow);
         } catch (e) {
-            Logger.log("Error processing row: " + e);
+            Logger.log("Error processing row: " + e + " | Row data: " + JSON.stringify(row)); // Log error and row data
             // Continue with next row
         }
     }
-    
+
     return data;
 }
 ```
@@ -338,44 +414,49 @@ function getNegativeKeywordsWithGAQL() {
       campaign.name,
       campaign_criterion.keyword.text,
       campaign_criterion.keyword.match_type,
-      campaign_criterion.status
+      campaign_criterion.status  // Note: Status often refers to the criterion status
     FROM campaign_criterion
     WHERE
       campaign_criterion.negative = TRUE AND
       campaign_criterion.type = KEYWORD AND
-      campaign.status IN ('ENABLED', 'PAUSED')
+      campaign.status IN ('ENABLED', 'PAUSED') // Filter by campaign status if needed
     ORDER BY campaign.name ASC
     `;
-    
+
     // Execute the query
     const campaignNegativeIterator = AdsApp.search(campaignNegativeQuery);
-    
+
     // Process the results
     const negativeKeywords = [];
     while (campaignNegativeIterator.hasNext()) {
         const row = campaignNegativeIterator.next();
-        
-        // Access fields using bracket notation with full paths
-        const campaignId = row['campaign.id'] || '';
-        const campaignName = row['campaign.name'] || '';
-        const keywordText = row['campaign_criterion.keyword.text'] || '';
-        const matchType = row['campaign_criterion.keyword.match_type'] || '';
-        const status = row['campaign_criterion.status'] || '';
-        
+
+        // --- Corrected Data Access ---
+        // Access nested fields correctly
+        const campaignId = row.campaign ? row.campaign.id : '';
+        const campaignName = row.campaign ? row.campaign.name : '';
+        // campaign_criterion fields might be nested or direct - CHECK LOGS
+        const criterion = row.campaignCriterion || {}; // Use fallback
+        const keyword = criterion.keyword || {}; // Use fallback
+        const keywordText = keyword.text || '';
+        const matchType = keyword.matchType || '';
+        const status = criterion.status || ''; // Status of the criterion
+        // --- End Corrected Data Access ---
+
         negativeKeywords.push({
             campaignId,
             campaignName,
             text: keywordText,
             matchType,
-            status
+            status // This is criterion status
         });
-        
+
         Logger.log(`Campaign: ${campaignName} | Negative Keyword: ${keywordText} | Match Type: ${matchType} | Status: ${status}`);
     }
-    
+
     // Example: Export to spreadsheet
     if (negativeKeywords.length > 0) {
-        const headers = ['Campaign ID', 'Campaign Name', 'Negative Keyword', 'Match Type', 'Status'];
+        const headers = ['Campaign ID', 'Campaign Name', 'Negative Keyword', 'Match Type', 'Criterion Status'];
         const rows = negativeKeywords.map(neg => [
             neg.campaignId,
             neg.campaignName,
@@ -383,8 +464,9 @@ function getNegativeKeywordsWithGAQL() {
             neg.matchType,
             neg.status
         ]);
+        // ... (code to write 'headers' and 'rows' to sheet using setValues) ...
     }
-    
+
     return negativeKeywords;
 }
 
@@ -421,49 +503,51 @@ function analyzeNegativeKeywordCoverage() {
 function debugQueryResults(query) {
     // Execute the query
     const rows = AdsApp.search(query);
-    
+
     // Check if any results were returned
     if (!rows.hasNext()) {
         Logger.log("WARNING: No results returned from query.");
         return;
     }
-    
+
     // Log the structure of the first row
     const firstRow = rows.next();
-    Logger.log("First row structure:");
-    
-    // Log all available fields with their full paths
-    for (let field in firstRow) {
-        const value = firstRow[field];
-        Logger.log(`Field: ${field}, Value: ${value}, Type: ${typeof value}`);
+    Logger.log("--- First row structure (raw JSON) ---");
+    Logger.log(JSON.stringify(firstRow)); // Log the full structure
+
+    // Log specific nested objects if they exist
+    Logger.log("--- Nested Object Checks ---");
+    if (firstRow.metrics) {
+        Logger.log("Metrics object: " + JSON.stringify(firstRow.metrics));
+    } else {
+        Logger.log("Metrics object not found.");
     }
-    
-    // Log metrics fields check
-    Logger.log("Metrics fields check:");
+    if (firstRow.campaign) {
+        Logger.log("Campaign object: " + JSON.stringify(firstRow.campaign));
+    } else {
+        Logger.log("Campaign object not found.");
+    }
+    // Add checks for other expected nested objects (adGroup, searchTermView, etc.)
+
+    // Log specific metrics fields check with correct access
+    Logger.log("--- Specific Metrics Value Check ---");
     try {
-        // Check specific metrics with full path notation
+        // Check specific metrics using correct nested access
+        const metrics = firstRow.metrics || {}; // Use fallback
+
         const testMetrics = [
-            'metrics.impressions',
-            'metrics.clicks',
-            'metrics.cost_micros',
-            'metrics.conversions',
-            'metrics.conversions_value'
+            'impressions', 'clicks', 'costMicros',
+            'conversions', 'conversionsValue' // Note: conversionsValue
         ];
-        
-        for (let metricPath of testMetrics) {
-            const value = firstRow[metricPath];
+
+        for (let metricName of testMetrics) {
+            const value = metrics[metricName]; // Access property within metrics object
             const numericValue = Number(value) || 0;
-            Logger.log(`${metricPath}: ${value} (${typeof value}) -> ${numericValue} (number)`);
+            Logger.log(`metrics.${metricName}: ${value} (${typeof value}) -> ${numericValue} (number)`);
         }
-        
-        // Log any additional metrics found
-        for (let field in firstRow) {
-            if (field.startsWith('metrics.')) {
-                const value = firstRow[field];
-                Logger.log(`Additional metric - ${field}: ${value}`);
-            }
-        }
+
     } catch (e) {
-        Logger.log("Error inspecting metrics: " + e);
+        Logger.log("Error inspecting metrics values: " + e);
     }
+    Logger.log("--- End Debug Log ---");
 }
