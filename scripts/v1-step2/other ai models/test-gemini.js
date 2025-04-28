@@ -1,5 +1,5 @@
 const GEMINI_API_KEY = ''
-const GEMINI_MODEL = "gemini-1.5-pro"
+const GEMINI_MODEL = "gemini-2.5-pro-preview-03-25"
 const GEMINI_CHEAP_MODEL = "gemini-2.0-flash"
 const PROMPT = "What's the view from the top of the tallest mountain in the world?"
 const CHEAP = true;

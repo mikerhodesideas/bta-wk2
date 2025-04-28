@@ -5,7 +5,6 @@
 const OPENAI_API_KEY = ''    // add your OpenAI API key here between the single quotes eg 'sk-proj-...'
 const MODEL = 'gpt-4o-mini'
 const PROMPT = 'What is the view from the top of the tallest mountain in the world?'
-const CHEAP = true;
 
 function main() {
     try {

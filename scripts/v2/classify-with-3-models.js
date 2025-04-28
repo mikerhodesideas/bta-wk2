@@ -23,7 +23,7 @@ const MODELS = {
         }
     },
     gemini: {
-        standard: 'gemini-2.5-pro',
+        standard: 'gemini-2.5-pro-preview-03-25',
         cheap: 'gemini-2.0-flash',
         costs: { 
             standard: { input: 1.25, output: 10.0 }, 
