@@ -4,22 +4,31 @@ const SHEET_URL = "https://docs.google.com/spreadsheets/d/1B60gfk6h-IMCEWYf_qWpS
 const CATEGORIES = ["INFORMATIONAL", "NAVIGATIONAL", "COMMERCIAL", "LOCAL", "QUESTION"];
 const MAX_RETRIES = 3;
 
-// Model and cost configuration
+// Model and cost configuration using updated model information
 const MODELS = {
     openai: {
-        standard: 'gpt-4o',
-        cheap: 'gpt-4o-mini',
-        costs: { standard: { input: 2.5, output: 10 }, cheap: { input: 0.15, output: 0.6 } }
+        standard: 'gpt-4-1106-preview',
+        cheap: 'o4-mini-2025-04-16',
+        costs: { 
+            standard: { input: 2.0, output: 8.0 }, 
+            cheap: { input: 1.10, output: 4.40 } 
+        }
     },
     anthropic: {
-        standard: 'claude-3-5-sonnet-latest',
+        standard: 'claude-3-7-sonnet-latest',
         cheap: 'claude-3-5-haiku-latest',
-        costs: { standard: { input: 3, output: 15 }, cheap: { input: 0.8, output: 4 } }
+        costs: { 
+            standard: { input: 3.0, output: 15.0 }, 
+            cheap: { input: 0.8, output: 4.0 } 
+        }
     },
-    google: {
-        standard: 'gemini-1.5-pro',
+    gemini: {
+        standard: 'gemini-2.5-pro',
         cheap: 'gemini-2.0-flash',
-        costs: { standard: { input: 0, output: 0 }, cheap: { input: 0, output: 0 } }
+        costs: { 
+            standard: { input: 1.25, output: 10.0 }, 
+            cheap: { input: 0.15, output: 0.6 } 
+        }
     }
 };
 
@@ -46,6 +55,11 @@ function readAndValidateSettings(spreadsheet) {
         cheap: spreadsheet.getRangeByName("cheap").getValue().toString().toLowerCase() === "true",
         topTerms: spreadsheet.getRangeByName("topTerms").getValues().flat().filter(term => term?.toString().trim())
     };
+
+    // Update model name to match provider format
+    if (settings.model === 'google') {
+        settings.model = 'gemini';
+    }
 
     if (!MODELS[settings.model]) throw new Error("Invalid model");
     if (!settings.topTerms.length) throw new Error("No search terms found");
@@ -94,14 +108,16 @@ function classifyTerm(term, apiKey, modelConfig) {
             }),
             extractResponse: data => ({
                 text: data.choices[0].message.content,
-                usage: data.usage
+                usage: {
+                    inputTokens: data.usage.prompt_tokens,
+                    outputTokens: data.usage.completion_tokens
+                }
             })
         },
         anthropic: {
             url: 'https://api.anthropic.com/v1/messages',
             headers: {
-                'x-api-key': apiKey,
-                'anthropic-version': '2023-06-01'
+                'x-api-key': apiKey
             },
             createPayload: prompt => ({
                 messages: [{ role: 'user', content: prompt }],
@@ -110,10 +126,13 @@ function classifyTerm(term, apiKey, modelConfig) {
             }),
             extractResponse: data => ({
                 text: data.content[0].text,
-                usage: data.usage
+                usage: {
+                    inputTokens: data.usage.input_tokens,
+                    outputTokens: data.usage.output_tokens
+                }
             })
         },
-        google: {
+        gemini: {
             url: `https://generativelanguage.googleapis.com/v1beta/models/${modelConfig}:generateContent?key=${apiKey}`,
             headers: {},
             createPayload: prompt => ({
@@ -122,13 +141,25 @@ function classifyTerm(term, apiKey, modelConfig) {
             }),
             extractResponse: data => ({
                 text: data.candidates[0].content.parts[0].text,
-                usage: data.usageMetadata
+                usage: {
+                    inputTokens: data.usageMetadata?.promptTokenCount || 0,
+                    outputTokens: data.usageMetadata?.candidatesTokenCount || 0
+                }
             })
         }
     };
 
-    const modelType = Object.keys(endpoints).find(key => modelConfig.toLowerCase().includes(key));
-    if (!modelType) throw new Error(`Unknown model type: ${modelConfig}`);
+    // Extract provider from modelConfig
+    let modelType;
+    if (modelConfig.includes('gemini')) {
+        modelType = 'gemini';
+    } else if (modelConfig.includes('claude')) {
+        modelType = 'anthropic';
+    } else if (modelConfig.includes('gpt') || modelConfig.includes('o4-mini')) {
+        modelType = 'openai';
+    } else {
+        throw new Error(`Unknown model type: ${modelConfig}`);
+    }
 
     const config = endpoints[modelType];
     const prompt = createClassificationPrompt(term);
@@ -185,8 +216,8 @@ function validateResponse(result) {
 
 function updateTokenCounts(usage) {
     if (!usage) return;
-    tokenCounts.input += usage.prompt_tokens || usage.input_tokens || usage.promptTokenCount || 0;
-    tokenCounts.output += usage.completion_tokens || usage.output_tokens || usage.candidatesTokenCount || 0;
+    tokenCounts.input += usage.inputTokens || 0;
+    tokenCounts.output += usage.outputTokens || 0;
 }
 
 function outputResults(spreadsheet, results) {

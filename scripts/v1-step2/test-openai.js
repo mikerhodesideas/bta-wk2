@@ -1,27 +1,16 @@
-const OPENAI_API_KEY = ''
-const OPENAI_MODEL = "gpt-4o"
-const OPENAI_CHEAP_MODEL = "gpt-4o-mini"
-const PROMPT = "What's the view from the top of the tallest mountain in the world?"
+// simple google ads script to test that your OpenAI API key is working
+// just add your OpenAI API key below (get one from https://platform.openai.com/api-keys)
+// and run the script
+
+const OPENAI_API_KEY = ''    // add your OpenAI API key here between the single quotes eg 'sk-proj-...'
+const MODEL = 'gpt-4o-mini'
+const PROMPT = 'What is the view from the top of the tallest mountain in the world?'
 const CHEAP = true;
 
 function main() {
-    if (CHEAP) {
-        model = OPENAI_CHEAP_MODEL;
-    } else {
-        model = OPENAI_MODEL;
-    }
     try {
-
-        let start = new Date();
-        let output = generateTextOpenAI(PROMPT, OPENAI_API_KEY, OPENAI_MODEL); // output
-
+        let output = generateTextOpenAI(PROMPT, OPENAI_API_KEY, MODEL); // output
         Logger.log('Text output: ' + output);
-
-        let end  = new Date();
-        let dur = (end - start) / 1000;
-
-        Logger.log('Time taken for script to run: ' + dur + ' seconds');
-
     } catch (error) {
         Logger.log('An error occurred: ' + error);
     }
@@ -34,7 +23,7 @@ function generateTextOpenAI(prompt, apiKey, model) {
         { "role": "user", "content": prompt }
     ];
     let payload = {
-        "model": model,
+        "model": MODEL,
         "messages": messages
     };
     let httpOptions = {
@@ -44,14 +33,14 @@ function generateTextOpenAI(prompt, apiKey, model) {
         "headers": {
             "Authorization": 'Bearer ' + apiKey
         },
-        'payload': JSON.stringify(payload)
+        "payload": JSON.stringify(payload)
     };
     let response = UrlFetchApp.fetch(url, httpOptions);
     let responseCode = response.getResponseCode();
     let responseContent = response.getContentText();
 
     let startTime = Date.now();
-    while (response.getResponseCode() !== 200 && Date.now() - startTime < 30000) {
+    while (response.getResponseCode() !== 200 && Date.now() - startTime < 15000) {
         Utilities.sleep(5000);
         response = UrlFetchApp.fetch(url, httpOptions);
         Logger.log('Time elapsed: ' + (Date.now() - startTime) / 1000 + ' seconds');

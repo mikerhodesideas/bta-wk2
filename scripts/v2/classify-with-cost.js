@@ -5,21 +5,21 @@
  */
 
 // Model constants
-const OPENAI_MODEL = "gpt-4o";
-const OPENAI_CHEAP_MODEL = "gpt-4o-mini";
-const ANTHROPIC_MODEL = "claude-3-5-sonnet-latest";
+const OPENAI_MODEL = "gpt-4-1106-preview";
+const OPENAI_CHEAP_MODEL = "o4-mini-2025-04-16";
+const ANTHROPIC_MODEL = "claude-3-7-sonnet-latest";
 const ANTHROPIC_CHEAP_MODEL = "claude-3-5-haiku-latest";
-const GOOGLE_MODEL = "gemini-1.5-pro";
-const GOOGLE_CHEAP_MODEL = "gemini-2.0-flash";
+const GEMINI_MODEL = "gemini-2.5-pro";
+const GEMINI_CHEAP_MODEL = "gemini-2.0-flash";
 
 // Token cost constants (per million tokens)
 const TOKEN_COSTS = {
-  [OPENAI_MODEL]: { input: 2.5, output: 10 },         // 4o
-  [OPENAI_CHEAP_MODEL]: { input: 0.15, output: 0.6 }, // 4o-mini
-  [ANTHROPIC_MODEL]: { input: 3, output: 15 },        // 3.5-sonnet
-  [ANTHROPIC_CHEAP_MODEL]: { input: 0.8, output: 4 }, // 3.5-haiku
-  [GOOGLE_MODEL]: { input: 0, output: 0 },            // 1.5-pro
-  [GOOGLE_CHEAP_MODEL]: { input: 0, output: 0 }       // 2.0-flash
+  [OPENAI_MODEL]: { input: 2.0, output: 8.0 },           // GPT-4.1
+  [OPENAI_CHEAP_MODEL]: { input: 1.10, output: 4.40 },   // o4-mini
+  [ANTHROPIC_MODEL]: { input: 3.0, output: 15.0 },       // 3.7-sonnet
+  [ANTHROPIC_CHEAP_MODEL]: { input: 0.8, output: 4.0 },  // 3.5-haiku
+  [GEMINI_MODEL]: { input: 1.25, output: 10.0 },         // 2.5-pro
+  [GEMINI_CHEAP_MODEL]: { input: 0.15, output: 0.6 }     // 2.0-flash
 };
 
 // Token tracking object

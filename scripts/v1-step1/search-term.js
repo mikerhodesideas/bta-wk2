@@ -1,9 +1,12 @@
-const SHEET_URL = 'https://docs.google.com/spreadsheets/d/1QgNpe-HniHsMPLdHicegAg1ka01l-GNKbvOw_XBMNTM/edit?gid=0#gid=0'; // leave blank or add a sheet here
-const TAB = 'SearchTerms';
+// script to get search terms from search campaigns
+// and save to a google sheet
+// just add your sheet url below
+// and run the script
 
-const mike_test = ''
+const SHEET_URL = ''        // leave blank or add a sheet here - eg mike's sheet: https://docs.google.com/spreadsheets/d/1QgNpe-HniHsMPLdHicegAg1ka01l-GNKbvOw_XBMNTM/edit?gid=0#gid=0'; 
+const TAB = 'SearchTerms';  // change tab name if you prefer
 
-// GAQL query for search terms
+// GAQL query for search terms from search campaigns. 
 const QUERY = `
 SELECT 
   search_term_view.search_term, 
@@ -22,20 +25,17 @@ ORDER BY metrics.impressions DESC
 
 function main() {
   try {
-    // is mike_test present & valid, set SHEET_URL to it's value
-    sheet_url = mike_test ? mike_test : SHEET_URL;
-
-    // Access the Google Sheet
+    // Access the Google Sheet or create a new one
     let ss;
-    if (!sheet_url) {
+    if (!SHEET_URL) {
       ss = SpreadsheetApp.create("Search Term Report");
       let url = ss.getUrl();
       Logger.log("No SHEET_URL found, so this sheet was created: " + url);
     } else {
-      ss = SpreadsheetApp.openByUrl(sheet_url);
+      ss = SpreadsheetApp.openByUrl(SHEET_URL);
     }
 
-    // Get or create the tab
+    // Get or create the tab & clear existing data
     let sheet;
     try {
       sheet = ss.getSheetByName(TAB);
@@ -51,13 +51,13 @@ function main() {
     }
 
     // Set headers
-    const headers = ["Search Term", "Campaign", "Ad Group", "Impressions", "Clicks", "Cost", "Conversions", "Conversion Value", "CPC", "CTR", "Conv Rate", "CPA", "ROAS", "AOV"];
+    const headers = ["Search Term", "Campaign", "Ad Group", "Impressions", "Clicks", "Cost", "Conversions", "Conv Value", "CPC", "CTR", "Conv Rate", "CPA", "ROAS", "AOV"];
 
     // Run the search term query
     const report = AdsApp.report(QUERY);
     const rows = report.rows();
 
-    // Process data and calculate metrics
+    // Process data and calculate derived metrics
     const data = calculateMetrics(rows);
 
     // Write data to sheet (only if we have data)

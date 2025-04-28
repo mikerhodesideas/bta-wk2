@@ -1,6 +1,11 @@
 // classify search terms using openAI
+// just add your OpenAI API key to the sheet this time & use a named range (key_openai)
+// create a named range for a range containing the terms you want to test (topTerms)
+// and run the script
+
+
+const SHEET_URL = "https://docs.google.com/spreadsheets/d/1B60gfk6h-IMCEWYf_qWpS6yySZQD8IUnvh9jz-Wtu5w/";
 const OPENAI_MODEL = "gpt-4o-mini";
-const SHEET_ID = "1B60gfk6h-IMCEWYf_qWpS6yySZQD8IUnvh9jz-Wtu5w";
 
 // Cost per million tokens (in USD)
 const COST_PER_1M_INPUT_TOKENS = 0.15;
@@ -19,7 +24,7 @@ let totalOutputTokens = 0;
 function main() {
     try {
         const apiKey = getApiKey();
-        const ss = SpreadsheetApp.openById(SHEET_ID);
+        const ss = SpreadsheetApp.openByUrl(SHEET_URL);
         const terms = ss.getRangeByName('topTerms').getValues();
 
         // Create or get Results sheet and clear it
@@ -45,20 +50,18 @@ function main() {
             const term = row[0];
             if (!term) return; // Skip empty rows
 
-            const prompt = `Classify the following Google Ads search term:
-"${term}"
+            const prompt = `Classify the following Google Ads search term: "${term}"
+                Please provide two classifications:
+                1. Primary Category (choose one): ${CATEGORIES.PRIMARY.join(', ')}
+                2. Search Intent (choose one): 
+                - INFORMATIONAL (queries seeking general information)
+                - NAVIGATIONAL (queries looking for a specific website or page)
+                - COMMERCIAL (queries with buying intent)
+                - LOCAL (queries related to local businesses or services)
+                - QUESTION (queries phrased as questions)
 
-Please provide two classifications:
-1. Primary Category (choose one): ${CATEGORIES.PRIMARY.join(', ')}
-2. Search Intent (choose one): 
-   - INFORMATIONAL (queries seeking general information)
-   - NAVIGATIONAL (queries looking for a specific website or page)
-   - COMMERCIAL (queries with buying intent)
-   - LOCAL (queries related to local businesses or services)
-   - QUESTION (queries phrased as questions)
-
-Return ONLY the two classifications separated by a pipe character (|) like this example:
-Swimwear|COMMERCIAL`;
+                Return ONLY the two classifications separated by a pipe character (|) like this example:
+                Swimwear|COMMERCIAL`;
 
             const { classification, inputTokens, outputTokens, cost } = generateTextOpenAI(prompt, apiKey, OPENAI_MODEL);
             const [category, intent] = classification.split('|');
@@ -109,7 +112,7 @@ Swimwear|COMMERCIAL`;
 
 // Get OpenAI API key from sheet
 function getApiKey() {
-    const ss = SpreadsheetApp.openById(SHEET_ID);
+    const ss = SpreadsheetApp.openByUrl(SHEET_URL);
     const keyRange = ss.getRangeByName('key_openai');
     if (!keyRange) {
         throw new Error('Named range "key_openai" not found in spreadsheet');
