@@ -5,7 +5,7 @@ Create a Google Ads script that reads search terms from a Google Sheet, classifi
 ## Requirements:
 
 1. **Data Access**:
-   - Read search terms from named range 'topTerms' in the Google Sheet
+   - Read search terms from named range 'topTerms' in the Google Sheet 
 
 2. **OpenAI Integration**:
    - Get API key from sheet's named range 'openaiApiKey'

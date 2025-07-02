@@ -48,7 +48,7 @@ function main() {
         let results = [];
         terms.forEach((row, index) => {
             const term = row[0];
-            if (!term) return; // Skip empty rows
+            if (!term) return; // Skip empty rows 
 
             const prompt = `Classify the following Google Ads search term: "${term}"
                 Please provide two classifications:

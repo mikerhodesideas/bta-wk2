@@ -72,7 +72,7 @@ function main() {
 }
 
 function processData(rows) {
-    // Create headers
+    // Create headers 
     const headers = [
         'Search Term',
         'Campaign',

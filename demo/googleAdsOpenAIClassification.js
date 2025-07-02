@@ -58,9 +58,8 @@ function classifyWithOpenAI(apiKey, searchTerms) {
 
 - INFORMATIONAL: Seeks general information without purchase intent (e.g., "what is chlorine resistance").
 - COMMERCIAL: Indicates purchase intent or product exploration, including brand/product terms (e.g., "freya swimwear").
-- LOCAL: Location-specific terms for nearby results at city/neighborhood level (e.g., "plumbing services near me").
-- GEOGRAPHICAL: Queries filtering by country or broad region (e.g., "swimwear australia").
-- QUESTION: Explicit questions phrased with question words (e.g., "how do I bake a cake").
+- LOCAL: Location-specific terms (e.g., "plumbing services near me", "vets melbourne").
+- QUESTION: Explicit questions phrased with question words (e.g., "how do I bake a cake", "why is the sky blue?").
 - OTHER: Anything not fitting above categories.
 
 Always choose Commercial for brand+product combos, Geographical for country mentions, Local for city/neighborhood, Question for questions, Informational for general info, and Other otherwise. Only output JSON array of objects like [{"query":"...","category":"..."}].`;

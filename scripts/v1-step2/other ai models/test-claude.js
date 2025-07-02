@@ -72,6 +72,6 @@ function generateTextAnthropicAPI(prompt, api_key, model) {
         answerText = 'No answer found in the response.';
     }
 
-    return answerText; // Return the extracted text.
+    return answerText; // Return the extracted text
 
 }

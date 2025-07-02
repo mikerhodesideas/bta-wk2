@@ -47,7 +47,7 @@ function generateTextOpenAI(prompt, apiKey, model) {
 
     if (responseCode !== 200) {
         Logger.log(`Error: OpenAI API request failed with status ${responseCode}.`);
-        Logger.log(`Read more about error codes here: https://help.openai.com/en/articles/6891839-api-error-codes`)
+        Logger.log(`Read more about error codes here: https://platform.openai.com/docs/guides/error-codes/api-errors`)
         try {
             let errorResponse = JSON.parse(responseContent);
             Logger.log(`Error details: ${errorResponse.error}`);

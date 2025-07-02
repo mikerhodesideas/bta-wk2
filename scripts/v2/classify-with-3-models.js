@@ -1,3 +1,4 @@
+// scripts/v2/classify-with-3-models.js
 // Week 2: Google Ads Script to classify search terms using AI models
 
 const SHEET_URL = '';
@@ -7,32 +8,32 @@ const MAX_RETRIES = 3; // in case API has problems, we'll try 3 times
 // Model and cost configuration using updated model information
 const MODELS = {
     openai: {
-        standard: 'gpt-4-1106-preview',
-        cheap: 'o4-mini-2025-04-16',
-        costs: { 
-            standard: { input: 2.0, output: 8.0 }, 
-            cheap: { input: 1.10, output: 4.40 } 
+        standard: 'o4-mini-2025-04-16',
+        cheap: 'gpt-4.1-nano-2025-04-14',
+        costs: {
+            standard: { input: 1.10, output: 4.40 },
+            cheap: { input: 0.10, output: 0.40 }
         }
     },
     anthropic: {
-        standard: 'claude-3-7-sonnet-latest',
-        cheap: 'claude-3-5-haiku-latest',
-        costs: { 
-            standard: { input: 3.0, output: 15.0 }, 
-            cheap: { input: 0.8, output: 4.0 } 
+        standard: 'claude-sonnet-4-20250514',
+        cheap: 'claude-3-5-haiku-20241022',
+        costs: {
+            standard: { input: 3.00, output: 15.00 },
+            cheap: { input: 0.80, output: 4.00 }
         }
     },
     gemini: {
-        standard: 'gemini-2.5-pro-preview-03-25',
-        cheap: 'gemini-2.0-flash',
-        costs: { 
-            standard: { input: 1.25, output: 10.0 }, 
-            cheap: { input: 0.15, output: 0.6 } 
+        standard: 'gemini-2.5-pro-preview-05-06',
+        cheap: 'gemini-2.5-flash-preview-05-20',
+        costs: {
+            standard: { input: 1.25, output: 10.00 },
+            cheap: { input: 0.15, output: 0.60 }
         }
     }
 };
 
-// Token tracking
+// Token tracking 
 let tokenCounts = { input: 0, output: 0 };
 
 function main() {

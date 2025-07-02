@@ -3,7 +3,7 @@
 // just add your sheet url below
 // and run the script
 
-const SHEET_URL = ''        // leave blank or add a sheet here - eg mike's sheet: https://docs.google.com/spreadsheets/d/1QgNpe-HniHsMPLdHicegAg1ka01l-GNKbvOw_XBMNTM/edit?gid=0#gid=0'; 
+const SHEET_URL = 'https://docs.google.com/spreadsheets/d/1QgNpe-HniHsMPLdHicegAg1ka01l-GNKbvOw_XBMNTM/edit?gid=1687103549#gid=1687103549'        // leave blank or add a sheet here - eg mike's sheet: https://docs.google.com/spreadsheets/d/1QgNpe-HniHsMPLdHicegAg1ka01l-GNKbvOw_XBMNTM/edit?gid=0#gid=0'; 
 const TAB = 'SearchTerms';  // change tab name if you prefer
 
 // GAQL query for search terms from search campaigns. 
@@ -11,7 +11,6 @@ const QUERY = `
 SELECT 
   search_term_view.search_term, 
   campaign.name,
-  ad_group.name,
   metrics.impressions, 
   metrics.clicks, 
   metrics.cost_micros, 
@@ -51,7 +50,7 @@ function main() {
     }
 
     // Set headers
-    const headers = ["Search Term", "Campaign", "Ad Group", "Impressions", "Clicks", "Cost", "Conversions", "Conv Value", "CPC", "CTR", "Conv Rate", "CPA", "ROAS", "AOV"];
+    const headers = ["Search Term", "Campaign", "Impressions", "Clicks", "Cost", "Conversions", "Conv Value", "CPC", "CTR", "Conv Rate", "CPA", "ROAS", "AOV"];
 
     // Run the search term query
     const report = AdsApp.report(QUERY);
@@ -82,7 +81,6 @@ function calculateMetrics(rows) {
 
     const searchTerm = row['search_term_view.search_term'];
     const campaign = row['campaign.name'];
-    const adGroup = row['ad_group.name'];
     const impressions = parseInt(row['metrics.impressions'], 10) || 0;
     const clicks = parseInt(row['metrics.clicks'], 10) || 0;
     const costMicros = parseInt(row['metrics.cost_micros'], 10) || 0;
@@ -99,7 +97,7 @@ function calculateMetrics(rows) {
     const aov = conversions > 0 ? conversionValue / conversions : 0;
 
     // Add all variables and calculated metrics to a new row
-    const newRow = [searchTerm, campaign, adGroup, impressions, clicks, cost, conversions, conversionValue, cpc, ctr, convRate, cpa, roas, aov];
+    const newRow = [searchTerm, campaign, impressions, clicks, cost, conversions, conversionValue, cpc, ctr, convRate, cpa, roas, aov];
 
     // Push new row to the data array
     data.push(newRow);

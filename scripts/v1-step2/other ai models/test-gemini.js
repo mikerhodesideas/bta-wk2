@@ -54,6 +54,6 @@ function generateTextGemini(prompt, apiKey, model) {
         return text
     } catch (error) {
         Logger.log('Error fetching data from Gemini API: ' + error);
-        return error.toString(); // Return error details
+        return error.toString(); // Return error details 
     }
 }
