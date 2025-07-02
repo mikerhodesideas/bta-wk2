@@ -3,7 +3,7 @@
 // just add your sheet url below
 // and run the script
 
-const SHEET_URL = 'https://docs.google.com/spreadsheets/d/1QgNpe-HniHsMPLdHicegAg1ka01l-GNKbvOw_XBMNTM/edit?gid=1687103549#gid=1687103549'        // leave blank or add a sheet here - eg mike's sheet: https://docs.google.com/spreadsheets/d/1QgNpe-HniHsMPLdHicegAg1ka01l-GNKbvOw_XBMNTM/edit?gid=0#gid=0'; 
+const SHEET_URL = ''        // leave blank or add a sheet here - eg mike's sheet: https://docs.google.com/spreadsheets/d/1QgNpe-HniHsMPLdHicegAg1ka01l-GNKbvOw_XBMNTM/edit?gid=0#gid=0'; 
 const TAB = 'SearchTerms';  // change tab name if you prefer
 
 // GAQL query for search terms from search campaigns. 

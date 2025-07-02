@@ -113,13 +113,13 @@ function main() {
 // Get OpenAI API key from sheet
 function getApiKey() {
     const ss = SpreadsheetApp.openByUrl(SHEET_URL);
-    const keyRange = ss.getRangeByName('key_openai');
+    const keyRange = ss.getRangeByName('openaiapikey');
     if (!keyRange) {
-        throw new Error('Named range "key_openai" not found in spreadsheet');
+        throw new Error('Named range "openaiapikey" not found in spreadsheet');
     }
     const key = keyRange.getValue();
     if (!key) {
-        throw new Error('OpenAI API key not found in named range "key_openai"');
+        throw new Error('OpenAI API key not found in named range "openaiapikey"');
     }
     return key;
 }
